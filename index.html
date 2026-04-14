@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Prueba de Conexión Báscula BLE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-10">
+    <div class="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-lg text-center">
+        <h1 class="text-2xl font-bold mb-6">Escáner de Báscula</h1>
+        
+        <div id="status" class="mb-4 text-sm text-gray-500">Bluetooth no iniciado</div>
+        
+        <div class="text-6xl font-black mb-8 text-blue-600">
+            <span id="pesoRealTime">0.0</span> <span class="text-2xl">kg</span>
+        </div>
+
+        <button onclick="conectarBascula()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition">
+            Buscar Báscula Renpho
+        </button>
+
+        <div id="log" class="mt-6 text-left text-xs text-gray-400 h-32 overflow-auto font-mono bg-gray-50 p-2 rounded-lg">
+            Esperando conexión...
+        </div>
+    </div>
+
+    <script>
+        async function conectarBascula() {
+            const $status = document.getElementById('status');
+            const $log = document.getElementById('log');
+            const $peso = document.getElementById('pesoRealTime');
+
+            try {
+                $status.textContent = "Buscando dispositivos...";
+                $log.innerHTML += "> Solicitando dispositivo Bluetooth...<br>";
+
+                // Intentamos buscar servicios de báscula estándar (0x181D es el estándar de Weight Scale)
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'Renpho' }, 
+                        { services: ['weight_scale'] }
+                    ],
+                    optionalServices: ['battery_service', 'body_composition']
+                });
+
+                $status.textContent = `Conectado a: ${device.name}`;
+                $log.innerHTML += `> Conectado a ${device.name}<br>`;
+
+                const server = await device.gatt.connect();
+                $log.innerHTML += "> Servidor GATT conectado...<br>";
+
+                // Nota: Renpho usa protocolos propietarios para la grasa corporal.
+                // Aquí intentaríamos leer la característica de peso (Weight Measurement)
+                // Esto es una prueba base; si Renpho tiene el protocolo bloqueado, 
+                // necesitaremos una librería específica o leer vía API Cloud.
+                
+                alert("Conexión establecida con " + device.name + ". Verificando envío de datos...");
+
+            } catch (error) {
+                $log.innerHTML += `<span class="text-red-500 italic">Error: ${error}</span><br>`;
+                console.error(error);
+                if (error.name === 'NotFoundError') {
+                    $status.textContent = "No se encontró el dispositivo.";
+                }
+            }
+        }
+    </script>
+</body>
+</html>
