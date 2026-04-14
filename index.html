@@ -1,27 +1,303 @@
-<script>
-async function conectarBascula() {
-    const $status = document.getElementById('status');
-    const $log = document.getElementById('log');
-
-    try {
-        $status.textContent = "Scanning for ANY device...";
-        $log.innerHTML += "> Requesting any Bluetooth device...<br>";
-
-        // Quitamos los filtros de nombre para ver todo lo que hay cerca
-        const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: ['weight_scale', 'body_composition', 0x181D, 0x181B] 
-        });
-
-        $status.textContent = `Found: ${device.name || 'Unnamed Device'}`;
-        $log.innerHTML += `> Connected to ${device.name}<br>`;
-        
-        const server = await device.gatt.connect();
-        alert("Connected to " + (device.name || "Device") + ". Checking services...");
-
-    } catch (error) {
-        $log.innerHTML += `<span class="text-red-500 italic">Error: ${error}</span><br>`;
-        $status.textContent = "Scan failed.";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infra Baldan - Oxy Hyperbaric Professional</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui; }
+    #graficaContainer { height: 250px; position: relative; }
+    @media print {
+      body * { visibility: hidden; }
+      #modalDetalle, #modalDetalle * { visibility: visible; }
+      #modalDetalle { position: absolute; left: 0; top: 0; width: 100%; max-height: none; overflow: visible; box-shadow: none; }
+      button, .no-print { display: none !important; }
+      .bg-gray-100 { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
     }
-}
+  </style>
+</head>
+<body class="bg-gray-50">
+
+<div class="max-w-6xl mx-auto p-6">
+  <div class="flex flex-col items-center mb-6">
+    <img src="logo.jpg" alt="Oxy Hyperbaric" class="h-[30px] mb-4" onerror="this.src='https://via.placeholder.com/150x30/0ea5e9/ffffff?text=OXY+HYPERBARIC';">
+    <h1 class="text-3xl font-bold text-center text-black">Infra Baldan</h1>
+    <p class="text-gray-500 italic">Professional Body Composition & Metabolism Tracker</p>
+  </div>
+
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+    <button onclick="nuevoCliente()" class="bg-black text-white px-6 py-3 rounded-2xl hover:bg-gray-800 flex items-center gap-2">
+      <span>+</span> New Client
+    </button>
+    <div class="flex gap-3 w-full sm:w-auto">
+      <button onclick="toggleUnidadesGlobal()" class="bg-white border border-gray-300 px-6 py-3 rounded-2xl text-sm font-medium">
+        Units: <span id="unidadGlobalText">kg / cm</span>
+      </button>
+      <input id="buscar" type="text" placeholder="Search client..." onkeyup="renderLista()" class="flex-1 px-5 py-3 border border-gray-300 rounded-2xl">
+    </div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="listaClientes"></div>
+</div>
+
+<div id="modalCliente" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+  <div class="bg-white rounded-3xl w-full max-w-lg mx-4 p-6">
+    <h2 class="text-2xl font-bold mb-6">Patient Registration</h2>
+    <div class="space-y-4">
+      <input id="idPaciente" placeholder="Patient ID (Unique)" class="w-full px-4 py-3 border border-blue-200 rounded-2xl text-lg font-bold bg-blue-50">
+      <input id="nombre" placeholder="Full Name" class="w-full px-4 py-3 border rounded-2xl text-lg">
+      <div class="grid grid-cols-2 gap-4">
+        <select id="sexo" onchange="sugerirGrasaIdeal()" class="px-4 py-3 border rounded-2xl">
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+        </select>
+        <input id="edad" type="number" placeholder="Age" onchange="sugerirGrasaIdeal()" class="px-4 py-3 border rounded-2xl">
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <input id="altura" type="number" step="0.1" placeholder="Ht (cm)" class="px-4 py-3 border rounded-2xl">
+        <input id="peso" type="number" step="0.1" placeholder="Wt (kg)" class="px-4 py-3 border rounded-2xl">
+        <input id="grasa" type="number" step="0.1" placeholder="% Fat" class="px-4 py-3 border rounded-2xl">
+      </div>
+      <div>
+        <label class="text-[10px] text-gray-400 uppercase font-bold ml-2">Scientific Goal Fat %</label>
+        <input id="grasaObjetivo" type="number" step="0.1" class="w-full px-4 py-3 border rounded-2xl text-lg font-medium">
+      </div>
+    </div>
+    <div class="flex gap-3 mt-8">
+      <button onclick="cerrarModal()" class="flex-1 py-4 text-gray-600">Cancel</button>
+      <button onclick="guardarCliente()" id="btnGuardar" class="flex-1 bg-black text-white py-4 rounded-2xl font-bold">Save Record</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalDetalle" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+  <div class="bg-white rounded-3xl w-full max-w-3xl mx-4 p-8 max-h-[95vh] overflow-auto shadow-2xl">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-3xl font-bold" id="nombreDetalle"></h2>
+      <div class="flex gap-2 no-print">
+        <button onclick="window.print()" class="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg">Download PDF Report</button>
+        <button onclick="cerrarDetalle()" class="text-4xl text-gray-300 hover:text-black ml-4">&times;</button>
+      </div>
+    </div>
+    
+    <div id="resumenCalculo" class="bg-gray-100 rounded-3xl p-6 mb-8"></div>
+    
+    <div id="metabolismData" class="grid grid-cols-2 gap-4 mb-8"></div>
+
+    <div id="progresoContainer" class="mb-8"></div>
+
+    <div class="grid grid-cols-2 gap-4 mb-8 text-sm">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="text-gray-400 uppercase text-[10px] font-bold">Registration Date</div>
+        <div class="font-medium text-lg" id="fechaInicio"></div>
+      </div>
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="text-gray-400 uppercase text-[10px] font-bold">Estimated Success Time</div>
+        <div class="font-medium text-lg text-blue-600" id="tiempoMeta"></div>
+      </div>
+    </div>
+
+    <div class="mb-10">
+      <h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Weight Projection (Scientific Ideal vs Actual)</h4>
+      <div id="graficaContainer" class="border border-gray-100 rounded-3xl p-4 bg-white shadow-sm">
+        <canvas id="grafica"></canvas>
+      </div>
+    </div>
+
+    <div class="bg-gray-50 p-6 rounded-3xl no-print">
+      <h3 class="font-bold mb-4 flex justify-between items-center">
+        Add Weekly Progress
+        <button onclick="syncScale()" class="text-[10px] bg-blue-100 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-200">
+          AUTO-SYNC SCALE (BT)
+        </button>
+      </h3>
+      <div class="grid grid-cols-3 gap-4">
+        <input id="fechaAvance" type="date" class="px-4 py-3 border rounded-2xl">
+        <input id="pesoAvance" type="number" step="0.1" placeholder="Weight" class="px-4 py-3 border rounded-2xl">
+        <input id="grasaAvance" type="number" step="0.1" placeholder="% Fat" class="px-4 py-3 border rounded-2xl">
+        <button onclick="agregarAvance()" id="btnAvance" class="col-span-3 bg-black text-white py-4 rounded-2xl font-bold">Save Progress Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyfTBe73GaXzem3p08rDd6N5ebXgBt2EROVx6HbrMrPATX2a8bbkoPiV1PhyifbjUU6/exec";
+  let clientes = [];
+  let clienteSeleccionado = null;
+  let usaLibras = false;
+  let chartInstance = null;
+
+  const KG_TO_LBS = 2.20462;
+  const BAJA_POR_SEMANA_KG = 0.907;
+
+  // SCIENTIFIC LOGIC
+  function sugerirGrasaIdeal() {
+    const edad = parseInt(document.getElementById('edad').value) || 30;
+    const sexo = document.getElementById('sexo').value;
+    let sugerencia = (sexo === 'M') ? (edad < 30 ? 15 : edad < 50 ? 18 : 21) : (edad < 30 ? 22 : edad < 50 ? 25 : 28);
+    document.getElementById('grasaObjetivo').value = sugerencia;
+  }
+
+  function calcularBio(c) {
+    const peso = parseFloat(c.peso) || 0;
+    const grasaActual = parseFloat(c.grasa) || 0;
+    const alturaM = (parseFloat(c.altura) || 170) / 100;
+    const grasaIdeal = parseFloat(c.grasaObjetivo) || 20;
+    const masaMagra = peso * (1 - grasaActual / 100);
+    const pesoIdeal = masaMagra / (1 - grasaIdeal / 100);
+    const bmr = 370 + (21.6 * masaMagra);
+    const ffmi = masaMagra / (alturaM * alturaM);
+    return { pesoIdeal, kgBajar: Math.max(0, peso - pesoIdeal), bmr, ffmi };
+  }
+
+  // BLUETOOTH SYNC (FOR CHROME & BLUEFY)
+  async function syncScale() {
+    if (!navigator.bluetooth) {
+      return alert("Bluetooth not supported. Please use Google Chrome (PC/Mac) or Bluefy (iOS).");
+    }
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['weight_scale', 0x181D]
+      });
+      alert("Connected to: " + device.name + ". Reading weight...");
+      // Logic for reading specific scale characteristics goes here when hardware is confirmed
+    } catch (e) { console.error(e); }
+  }
+
+  function toggleUnidadesGlobal() {
+    usaLibras = !usaLibras;
+    document.getElementById('unidadGlobalText').textContent = usaLibras ? "lbs / cm" : "kg / cm";
+    if (clienteSeleccionado) verDetalle(clienteSeleccionado);
+  }
+
+  async function cargarClientes() {
+    try {
+      const res = await fetch(WEB_APP_URL + "?action=obtenerClientes");
+      clientes = await res.json();
+      renderLista();
+    } catch (e) { console.error(e); }
+  }
+
+  function renderLista() {
+    const container = document.getElementById('listaClientes');
+    container.innerHTML = '';
+    const term = document.getElementById('buscar').value.toLowerCase();
+    clientes.forEach(c => {
+      if (c.nombre.toLowerCase().includes(term)) {
+        const card = document.createElement('div');
+        card.className = "bg-white rounded-3xl shadow-sm border border-gray-100 p-6 cursor-pointer hover:shadow-md transition";
+        card.innerHTML = `<div class="text-[10px] font-bold text-blue-500 mb-1">ID: ${c.id}</div><div class="font-bold text-xl mb-1">${c.nombre}</div><div class="text-gray-400 text-xs">${c.sexo === 'M' ? 'MALE' : 'FEMALE'} • ${c.edad} YEARS</div>`;
+        card.onclick = () => verDetalle(c);
+        container.appendChild(card);
+      }
+    });
+  }
+
+  function verDetalle(c) {
+    clienteSeleccionado = c;
+    const bio = calcularBio(c);
+    const factor = usaLibras ? KG_TO_LBS : 1;
+    const u = usaLibras ? "lbs" : "kg";
+    const listaAvances = c.avances || [];
+    const ultimoPeso = listaAvances.length > 0 ? listaAvances[listaAvances.length - 1].peso : c.peso;
+    const ultimoGrasa = listaAvances.length > 0 ? listaAvances[listaAvances.length - 1].grasa : c.grasa;
+
+    document.getElementById('nombreDetalle').textContent = c.nombre;
+    document.getElementById('resumenCalculo').innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div><div class="text-[10px] text-gray-400 font-bold uppercase">Current Weight</div><div class="text-3xl font-black">${(ultimoPeso * factor).toFixed(1)} ${u}</div></div>
+        <div><div class="text-[10px] text-gray-400 font-bold uppercase">Body Fat</div><div class="text-3xl font-black">${ultimoGrasa}%</div></div>
+        <div><div class="text-[10px] text-blue-400 font-bold uppercase">Goal Fat</div><div class="text-3xl font-black text-blue-600">${c.grasaObjetivo}%</div></div>
+        <div><div class="text-[10px] text-gray-400 font-bold uppercase">Target Weight</div><div class="text-3xl font-black">${(bio.pesoIdeal * factor).toFixed(1)} ${u}</div></div>
+      </div>`;
+
+    document.getElementById('metabolismData').innerHTML = `
+      <div class="bg-blue-50 p-5 rounded-3xl">
+        <div class="text-[10px] text-blue-600 font-bold uppercase">Basal Metabolic Rate (BMR)</div>
+        <div class="text-2xl font-black text-blue-900">${Math.round(bio.bmr)} kcal/day</div>
+      </div>
+      <div class="bg-gray-50 p-5 rounded-3xl">
+        <div class="text-[10px] text-gray-600 font-bold uppercase">FFMI (Muscle Index)</div>
+        <div class="text-2xl font-black text-gray-800">${bio.ffmi.toFixed(1)}</div>
+      </div>`;
+
+    const kgBajados = Math.max(0, c.peso - ultimoPeso);
+    const pct = bio.kgBajar > 0 ? Math.min(100, (kgBajados / bio.kgBajar) * 100) : 100;
+    
+    document.getElementById('progresoContainer').innerHTML = `
+      <div class="bg-white border-2 border-gray-50 p-6 rounded-3xl">
+        <div class="flex justify-between items-center mb-2"><span class="font-bold">Goal Progress</span><span class="text-2xl font-black text-green-600">${pct.toFixed(0)}%</span></div>
+        <div class="w-full bg-gray-100 h-4 rounded-full overflow-hidden"><div class="bg-green-500 h-full transition-all" style="width:${pct}%"></div></div>
+        <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold">REMAINING: ${( (bio.pesoIdeal < ultimoPeso ? ultimoPeso - bio.pesoIdeal : 0) * factor).toFixed(1)} ${u} TO SUCCESS</p>
+      </div>`;
+
+    document.getElementById('fechaInicio').textContent = new Date(c.fechaInicio).toLocaleDateString();
+    document.getElementById('tiempoMeta').textContent = `${Math.ceil(bio.kgBajar / BAJA_POR_SEMANA_KG)} Weeks Remaining`;
+    document.getElementById('modalDetalle').classList.remove('hidden');
+    actualizarGrafica(c, factor, bio.pesoIdeal);
+  }
+
+  function actualizarGrafica(c, factor, pesoIdeal) {
+    if (chartInstance) chartInstance.destroy();
+    const ctx = document.getElementById('grafica').getContext('2d');
+    const labels = ["Week 0"];
+    const dataReal = [c.peso * factor];
+    const dataObjetivo = [c.peso * factor];
+    if(c.avances) c.avances.forEach((a, i) => { labels.push("Wk " + (i+1)); dataReal.push(a.peso * factor); });
+
+    let pesoProyectado = c.peso;
+    for(let i = 1; i <= 16; i++) {
+      if (labels.length <= i) labels.push("Wk " + i);
+      pesoProyectado -= BAJA_POR_SEMANA_KG;
+      dataObjetivo.push((pesoProyectado < pesoIdeal ? pesoIdeal : pesoProyectado) * factor);
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Actual Weight', data: dataReal, borderColor: '#000', borderWidth: 4, fill: false, tension: 0.3 },
+          { label: 'Ideal Scientific Path', data: dataObjetivo, borderColor: '#3b82f6', borderDash: [6, 6], pointRadius: 0, fill: false }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+  }
+
+  async function guardarCliente() {
+    const id = document.getElementById('idPaciente').value.trim();
+    if(!id) return alert("ID Required");
+    const btn = document.getElementById('btnGuardar');
+    btn.disabled = true;
+    let p = parseFloat(document.getElementById('peso').value);
+    if (usaLibras) p /= KG_TO_LBS;
+    const cliente = { id, nombre: document.getElementById('nombre').value, sexo: document.getElementById('sexo').value, edad: document.getElementById('edad').value, altura: document.getElementById('altura').value, peso: p, grasa: document.getElementById('grasa').value, grasaObjetivo: document.getElementById('grasaObjetivo').value, fechaInicio: new Date().toISOString() };
+    await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "guardarCliente", cliente })});
+    alert("Patient Profile Created."); cerrarModal(); cargarClientes();
+    btn.disabled = false;
+  }
+
+  async function agregarAvance() {
+    const btn = document.getElementById('btnAvance');
+    let p = parseFloat(document.getElementById('pesoAvance').value);
+    let g = parseFloat(document.getElementById('grasaAvance').value);
+    let f = document.getElementById('fechaAvance').value;
+    if(!p || !g || !f) return alert("All fields required");
+    btn.disabled = true;
+    if (usaLibras) p /= KG_TO_LBS;
+    await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "agregarAvance", avance: { id: clienteSeleccionado.id, peso: p, grasa: g, fecha: f }})});
+    alert("Progress Entry Saved."); cerrarDetalle(); cargarClientes();
+    btn.disabled = false;
+  }
+
+  function nuevoCliente() { document.getElementById('modalCliente').classList.remove('hidden'); sugerirGrasaIdeal(); }
+  function cerrarModal() { document.getElementById('modalCliente').classList.add('hidden'); }
+  function cerrarDetalle() { document.getElementById('modalDetalle').classList.add('hidden'); }
+  window.onload = cargarClientes;
 </script>
+</body>
+</html>
