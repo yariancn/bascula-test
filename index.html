@@ -1,28 +1,41 @@
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-100 py-6 mb-8">
-    
-    <div class="text-center">
-        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Target Body Fat</p>
-        <div class="flex items-center justify-center space-x-2">
-            <span id="refGrasaActual" class="text-xl font-black text-blue-600">--%</span>
-            <span class="text-gray-300">vs</span>
-            <span id="refGrasaIdeal" class="text-xl font-bold text-gray-800">22%</span>
-        </div>
-        <p class="text-[9px] text-gray-400 mt-1 italic">Based on age/gender norms</p>
-    </div>
+<div class="flex flex-col items-center mb-12">
+  <img src="logo.jpg" alt="Oxy Hyperbaric" class="h-[120px] w-auto mb-6 object-contain" 
+       onerror="this.src='https://via.placeholder.com/400x120/000000/ffffff?text=OXY+HYPERBARIC';">
+  <h1 class="text-4xl font-black text-center text-black tracking-tighter uppercase italic">PredictaCore Titán</h1>
+  <div class="h-1.5 w-24 bg-blue-600 mt-2"></div>
+</div>
 
+<div class="flex justify-end mb-4 px-4">
+  <button onclick="toggleUnits(event)" id="unitToggle" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-full transition-all border-2 border-gray-200">
+    Unidades: <span id="currentUnitText" class="text-blue-600">KG</span>
+  </button>
+</div>
+
+<div class="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+  <table class="w-full text-left">
+    <thead class="bg-gray-50 border-b border-gray-100 text-[10px] uppercase tracking-widest text-gray-400">
+      <tr>
+        <th class="px-6 py-4">Paciente</th>
+        <th class="px-6 py-4 text-center">Status</th>
+        <th class="px-6 py-4 text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="clientTableBody">
+      </tbody>
+  </table>
+</div>
+
+<div id="referencePanel" class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-100 py-6 my-8 bg-gray-50/50 rounded-xl">
+    <div class="text-center">
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Target Fat %</p>
+        <div id="refFatRange" class="text-lg font-black text-gray-800">18% - 24%</div>
+    </div>
     <div class="text-center border-l border-r border-gray-100">
-        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">FFMI Goal</p>
-        <div class="flex items-center justify-center space-x-2">
-            <span id="refFFMIActual" class="text-xl font-black text-blue-600">--</span>
-            <span class="text-gray-300">vs</span>
-            <span id="refFFMIIdeal" class="text-xl font-bold text-gray-800">20.5</span>
-        </div>
-        <p class="text-[9px] text-gray-400 mt-1 italic">Optimal muscle density</p>
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Optimal FFMI</p>
+        <div id="refFFMIRange" class="text-lg font-black text-gray-800">19.5 - 21.0</div>
     </div>
-
     <div class="text-center">
-        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Metabolic Age Gap</p>
-        <div id="metabolicGap" class="text-xl font-black text-red-500">+5 Years</div>
-        <p class="text-[9px] text-gray-400 mt-1 italic">Current vs Cronological</p>
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Metabolic Age</p>
+        <div id="metabolicAgeStatus" class="text-lg font-black text-blue-600">Optimal</div>
     </div>
 </div>
