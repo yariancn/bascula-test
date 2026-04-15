@@ -95,10 +95,6 @@
             box-shadow: 0 15px 30px rgba(0, 191, 255, 0.4);
         }
 
-        .btn-sync:active {
-            transform: translateY(1px);
-        }
-
         .status-box {
             margin-top: 30px;
             font-size: 0.85rem;
@@ -106,7 +102,7 @@
             background: #000;
             border-radius: 15px;
             border: 1px solid #222;
-            color: #4cd964; /* Color verde éxito */
+            color: #4cd964; 
             min-height: 20px;
             font-family: 'Monaco', monospace;
         }
@@ -144,11 +140,12 @@
         <button class="btn-sync" onclick="obtenerPesoDesdeNube()">Sincronizar Báscula</button>
 
         <div class="status-box" id="statusMessage">
-            SISTEMA LISTO: ESPERANDO CAPTURA
+            SISTEMA TITÁN LISTO: ESPERANDO CAPTURA
         </div>
     </div>
 
     <script>
+        // URL de tu Script de Google actualizado (ID: ...MLCMCkD)
         const API_URL = "https://script.google.com/macros/s/AKfycbzN_Wr4xUVpbSp3wTEmggTLWQUgCPm4lQHRPHcqE0xYfGK_PPDVW0nYO8qfbMLCMCkD/exec";
 
         async function obtenerPesoDesdeNube() {
@@ -156,26 +153,30 @@
             const displayPeso = document.getElementById('displayPeso');
             const loader = document.getElementById('loader');
 
-            // UI State: Cargando
-            statusBox.style.color = "#ff9500"; // Naranja
-            statusBox.innerText = "ACCEDIENDO A NUBE GOOGLE FIT...";
+            statusBox.style.color = "#ff9500"; 
+            statusBox.innerText = "ACCEDIENDO A NUBE FITBIT...";
             loader.style.display = "block";
 
             try {
-                // Petición al script que ya tiene habilitada la Fitness API
+                // Llamamos a la acción obtenerPesoWyze que definimos en el Apps Script
                 const response = await fetch(API_URL + "?action=obtenerPesoWyze");
                 const data = await response.json();
 
-                if (data.success && data.peso !== "0.0") {
-                    // Actualizar pantalla con el peso real
-                    displayPeso.innerHTML = `${data.peso}<span>kg</span>`;
-                    statusBox.style.color = "#4cd964"; // Verde
-                    statusBox.innerText = "SINCRONIZACIÓN EXITOSA: " + data.peso + " KG";
-                    
-                    // Aquí podrías disparar el guardado automático si lo deseas
+                if (data.success) {
+                    // Si recibimos peso real lo mostramos
+                    if (data.peso !== "0.0" && data.peso !== "CONECTADO_A_FITBIT") {
+                        displayPeso.innerHTML = `${data.peso}<span>kg</span>`;
+                        statusBox.style.color = "#4cd964"; 
+                        statusBox.innerText = "SINCRONIZACIÓN EXITOSA: " + data.peso + " KG";
+                    } else {
+                        // Caso donde la conexión es buena pero no hay pesada hoy
+                        statusBox.style.color = "#ff9500";
+                        statusBox.innerText = "PUENTE OK: PESANDO AL PACIENTE...";
+                        displayPeso.innerHTML = `--.-<span>kg</span>`;
+                    }
                 } else {
-                    statusBox.style.color = "#ff3b30"; // Rojo
-                    statusBox.innerText = "ERROR: NO HAY PESADAS RECIENTES (ÚLTIMOS 10 MIN)";
+                    statusBox.style.color = "#ff3b30"; 
+                    statusBox.innerText = "ERROR: " + (data.message || "SIN DATOS RECIENTES");
                 }
             } catch (error) {
                 console.error("Error:", error);
