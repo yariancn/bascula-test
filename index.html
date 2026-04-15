@@ -3,83 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PredictaCore | Sincronización Wyze</title>
+    <title>PredictaCore | Sincronización Directa</title>
     <style>
-        :root {
-            --primary: #003087;
-            --accent: #00BFFF;
-            --bg: #f4f7f6;
-        }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            background: var(--bg); 
-            margin: 0; 
-            padding: 20px; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .card { 
-            background: white; 
-            padding: 40px; 
-            border-radius: 30px; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1); 
-            max-width: 400px; 
-            width: 100%;
-        }
-        h2 { color: var(--primary); margin-bottom: 10px; }
-        #peso { 
-            font-size: 5rem; 
-            font-weight: bold; 
-            color: var(--accent); 
-            margin: 20px 0; 
-            transition: all 0.3s ease;
-        }
+        :root { --primary: #003087; --accent: #00BFFF; --bg: #f4f7f6; }
+        body { font-family: sans-serif; text-align: center; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .card { background: white; padding: 40px; border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
+        #peso { font-size: 5rem; font-weight: bold; color: var(--accent); margin: 20px 0; }
         .unit { font-size: 1.5rem; color: #888; }
-        .btn { 
-            background: var(--primary); 
-            color: white; 
-            border: none; 
-            padding: 18px 35px; 
-            border-radius: 50px; 
-            font-size: 1.2rem; 
-            font-weight: bold;
-            cursor: pointer; 
-            width: 100%;
-            transition: transform 0.2s, background 0.2s;
-            box-shadow: 0 8px 20px rgba(0,48,135,0.3);
-        }
-        .btn:active { transform: scale(0.98); }
+        .btn { background: var(--primary); color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; box-shadow: 0 8px 20px rgba(0,48,135,0.3); }
         #status { font-size: 0.9rem; color: #555; margin-top: 20px; min-height: 40px; }
-        #log { 
-            font-family: monospace;
-            font-size: 0.7rem; 
-            color: #777; 
-            text-align: left; 
-            background: #f0f0f0; 
-            padding: 10px; 
-            height: 100px; 
-            overflow-y: auto; 
-            margin-top: 20px; 
-            border-radius: 10px;
-            border: 1px solid #ddd;
-        }
+        #log { font-family: monospace; font-size: 0.7rem; color: #777; text-align: left; background: #f0f0f0; padding: 10px; height: 100px; overflow-y: auto; margin-top: 20px; border-radius: 10px; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
-
     <div class="card">
-        <h2>PredictaCore</h2>
-        <p style="color:#666; margin-bottom:30px;">Control de Peso Directo</p>
-        
+        <h2 style="color:var(--primary)">PredictaCore</h2>
         <div id="peso">0.0<span class="unit">kg</span></div>
-        
         <button class="btn" onclick="conectarWyze()">CONECTAR BÁSCULA</button>
-        
         <p id="status">Presiona el botón para iniciar</p>
-        
         <div id="log">Consola lista...</div>
     </div>
 
@@ -89,68 +30,45 @@
         const logEl = document.getElementById('log');
 
         function log(msg) {
-            const time = new Date().toLocaleTimeString().split(' ')[0];
-            logEl.innerHTML += `[${time}] ${msg}<br>`;
+            logEl.innerHTML += `> ${msg}<br>`;
             logEl.scrollTop = logEl.scrollHeight;
-            console.log(msg);
         }
 
         async function conectarWyze() {
             try {
                 log("Buscando Wyze Scale...");
-                statusEl.innerText = "Buscando dispositivo Bluetooth...";
-
-                // Solicitamos acceso a la báscula
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { namePrefix: 'Wyze Scale' },
-                        { namePrefix: 'Scale' }
-                    ],
-                    optionalServices: [
-                        '0000181b-0000-1000-8000-00805f9b34fb', // Servicio Peso Estándar
-                        '0000181d-0000-1000-8000-00805f9b34fb'  // Composición Corporal
-                    ]
+                    filters: [{ namePrefix: 'Wyze' }, { namePrefix: 'Scale' }],
+                    optionalServices: ['0000181b-0000-1000-8000-00805f9b34fb']
                 });
 
-                log("Dispositivo encontrado: " + device.name);
-                statusEl.innerText = "Conectando a la báscula...";
-
                 const server = await device.gatt.connect();
-                log("Servidor GATT conectado.");
-
-                // Obtenemos el servicio de medición de peso
                 const service = await server.getPrimaryService('0000181b-0000-1000-8000-00805f9b34fb');
                 const characteristic = await service.getCharacteristic('00002a9d-0000-1000-8000-00805f9b34fb');
 
-                // Iniciamos las notificaciones en tiempo real
                 await characteristic.startNotifications();
-                log("Notificaciones activadas.");
-                statusEl.innerText = "¡Listo! Ahora súbete a la báscula.";
+                statusEl.innerText = "¡Conectado! Súbete a la báscula.";
+                log("Esperando datos...");
 
                 characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     const data = event.target.value;
+                    let weightRaw = data.getUint16(1, true);
                     
-                    // DECODIFICACIÓN WYZE:
-                    // El estándar BLE para Peso envía el valor en los bytes 1 y 2
-                    // Wyze suele reportar con una resolución de 0.005
-                    const weightRaw = data.getUint16(1, true); 
-                    const weightKg = (weightRaw * 0.005).toFixed(1);
+                    // Ajuste de escala: Wyze usa 0.005 o 0.01 dependiendo del firmware
+                    let weightKg = (weightRaw * 0.005).toFixed(1);
+                    
+                    // Si el peso es ridículamente bajo (ej. marca 55kg cuando pesas 110kg), multiplicamos por 2
+                    if (weightKg > 10 && weightKg < 30) { weightKg = (weightRaw * 0.01).toFixed(1); }
 
-                    if (parseFloat(weightKg) > 0) {
-                        pesoEl.innerHTML = `${weightKg}<span class="unit">kg</span>`;
-                        log("Dato recibido: " + weightKg + " kg");
-                    }
+                    pesoEl.innerHTML = `${weightKg}<span class="unit">kg</span>`;
                 });
 
-                // Manejar desconexión
                 device.addEventListener('gattserverdisconnected', () => {
-                    log("Báscula desconectada.");
-                    statusEl.innerText = "Báscula desconectada. Pulsa para reconectar.";
+                    statusEl.innerText = "Desconectado.";
                 });
 
             } catch (error) {
-                log("ERROR: " + error);
-                statusEl.innerText = "Error de conexión. Revisa el log.";
+                log("Error: " + error);
             }
         }
     </script>
