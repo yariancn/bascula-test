@@ -1,71 +1,51 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>PredictaCore | WL_SC2 Force</title>
+    <title>PredictaCore | WL_SC2 Sniffer</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f7f6; padding: 20px; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: inline-block; }
-        #peso { font-size: 5rem; color: #00BFFF; font-weight: bold; }
-        #log { font-family: monospace; font-size: 0.7rem; text-align: left; background: #222; color: #0f0; padding: 15px; height: 150px; overflow-y: auto; margin-top: 20px; border-radius: 10px; }
-        .btn { background: #003087; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 1.2rem; cursor: pointer; }
+        body { font-family: sans-serif; text-align: center; background: #000; color: #0f0; padding: 20px; }
+        #log { text-align: left; background: #111; padding: 20px; height: 300px; overflow-y: auto; border: 1px solid #333; font-family: monospace; }
+        .btn { background: #00BFFF; color: white; border: none; padding: 20px; border-radius: 10px; font-size: 1.2rem; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>PredictaCore</h2>
-        <div id="peso">0.0 kg</div>
-        <button class="btn" onclick="conectar()">FORZAR SINCRONIZACIÓN</button>
-        <div id="log">Esperando...</div>
-    </div>
+    <h2>Sniffer de Datos WL_SC2</h2>
+    <button class="btn" onclick="escucharAnuncios()">INICIAR ESCUCHA</button>
+    <div id="log">Haz clic y luego súbete a la báscula...</div>
 
     <script>
-        const log = (msg) => { document.getElementById('log').innerHTML += `> ${msg}<br>`; };
-
-        async function conectar() {
+        async function escucharAnuncios() {
+            const log = (msg) => { document.getElementById('log').innerHTML += `> ${msg}<br>`; };
             try {
-                log("Pidiendo permiso total...");
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    // Incluimos TODOS los posibles servicios de Wyze para que el Mac los 'desbloquee'
-                    optionalServices: [
-                        '0000181b-0000-1000-8000-00805f9b34fb',
-                        '00001314-0000-1000-8000-00805f9b34fb',
-                        '0000ff01-0000-1000-8000-00805f9b34fb', // Servicio alternativo Wyze
-                        '0000180a-0000-1000-8000-00805f9b34fb'
-                    ]
+                log("Activando modo escucha (Bluetooth Scan)...");
+                
+                // Esta función busca dispositivos cercanos sin conectarse a ellos
+                const browser = await navigator.bluetooth.requestLEScan({
+                    filters: [{ name: 'WL_SC2' }],
+                    keepRepeatedDevices: true
                 });
 
-                log("Conectado a: " + device.name);
-                const server = await device.gatt.connect();
+                log("Escuchando... Súbete a la báscula ahora.");
 
-                log("Buscando servicios de datos...");
-                const services = await server.getPrimaryServices();
-                
-                if (services.length <= 1) {
-                    log("Báscula bloqueada. PISA LA BÁSCULA y dale a CONECTAR de nuevo sin soltar el botón UNIT.");
-                    return;
-                }
-
-                // Si llegamos aquí, hemos desbloqueado los servicios
-                for (const service of services) {
-                    log("Hallado: " + service.uuid);
-                    const characteristics = await service.getCharacteristics();
-                    for (const char of characteristics) {
-                        if (char.properties.notify) {
-                            log("Escuchando en: " + char.uuid.substring(0,8));
-                            await char.startNotifications();
-                            char.addEventListener('characteristicvaluechanged', (e) => {
-                                const val = e.target.value;
-                                log("Dato crudo recibido!");
-                                // Lógica de peso simplificada para ver si responde
-                                document.getElementById('peso').innerText = "RECIBIENDO...";
-                            });
+                navigator.bluetooth.addEventListener('advertisementreceived', event => {
+                    log("¡Paquete recibido de " + event.device.name + "!");
+                    
+                    // Las Wyze modernas mandan el peso en el "Manufacturer Data"
+                    if (event.manufacturerData) {
+                        for (let [id, data] of event.manufacturerData) {
+                            log("Datos de fabricante detectados...");
+                            // Intentamos encontrar el peso en los bytes del anuncio
+                            if (data.byteLength >= 4) {
+                                let weight = (data.getUint16(2, false) * 0.1).toFixed(1);
+                                log("POSIBLE PESO DETECTADO: " + weight + " kg");
+                            }
                         }
                     }
-                }
+                });
+
             } catch (e) {
-                log("Error: " + e);
+                log("ERROR: " + e);
+                log("TIP: Asegúrate de que 'Experimental Web Platform features' esté activado en chrome://flags");
             }
         }
     </script>
