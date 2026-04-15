@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PredictaCore - Control de Báscula</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f7f6; padding: 40px; }
+        .card { background: white; padding: 30px; border-radius: 20px; shadow: 0 4px 10px rgba(0,0,0,0.1); display: inline-block; }
+        .btn { background: #003087; color: white; border: none; padding: 15px 30px; border-radius: 10px; font-size: 1.2rem; cursor: pointer; }
+        #peso { font-size: 4rem; color: #00BFFF; margin: 20px 0; }
+        #log { font-size: 0.8rem; color: #666; text-align: left; background: #eee; padding: 10px; height: 100px; overflow-y: scroll; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Sincronización de Peso</h2>
+        <div id="peso">0.0 kg</div>
+        <button class="btn" onclick="iniciarSincronizacion()">CONECTAR BÁSCULA</button>
+        <p id="status">Presiona el botón y súbete a la báscula</p>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const logElement = document.getElementById('log');
+        function imprimir(msg) {
+            logElement.innerHTML += `> ${msg}<br>`;
+            console.log(msg);
+        }
+
+        async function iniciarSincronizacion() {
+            try {
+                imprimir("Buscando Wyze Scale...");
+                
+                // Paso 1: Solicitar dispositivo
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'Wyze' }, { namePrefix: 'Scale' }],
+                    optionalServices: [
+                        '0000181b-0000-1000-8000-00805f9b34fb', // Servicio de Peso estándar
+                        'a530181b-0000-1000-8000-00805f9b34fb'  // Posible servicio Wyze
+                    ]
+                });
+
+                imprimir("Conectado a: " + device.name);
+                const server = await device.gatt.connect();
+                
+                // Paso 2: Buscar el servicio de medición de peso
+                // Wyze suele usar el UUID estándar 0x181B
+                const service = await server.getPrimaryService('body_composition'); 
+                const characteristic = await service.getCharacteristic('body_composition_measurement');
+
+                imprimir("Esperando pesada...");
+
+                // Paso 3: Escuchar cambios
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    const data = event.target.value;
+                    decodificarDatos(data);
+                });
+
+            } catch (error) {
+                imprimir("ERROR: " + error);
+            }
+        }
+
+        function decodificarDatos(dataView) {
+            // La báscula manda un array de bytes. 
+            // El byte 1 y 2 suelen ser el peso en resolución de 0.005 o 0.01
+            const pesoRaw = dataView.getUint16(1, true); 
+            const pesoKg = (pesoRaw * 0.01).toFixed(2); // Ajuste típico de Wyze
+            
+            document.getElementById('peso').innerText = pesoKg + " kg";
+            imprimir("Peso recibido: " + pesoKg + " kg");
+        }
+    </script>
+</body>
+</html>
