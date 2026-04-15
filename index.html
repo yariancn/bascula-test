@@ -3,79 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PredictaCore | Control WL_SC2</title>
+    <title>PredictaCore | Master Wyze Link</title>
     <style>
         :root { --primary: #003087; --accent: #00BFFF; --bg: #f4f7f6; }
-        body { 
-            font-family: -apple-system, system-ui, sans-serif; 
-            text-align: center; 
-            background: var(--bg); 
-            margin: 0; 
-            padding: 20px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-        }
-        .card { 
-            background: white; 
-            padding: 40px; 
-            border-radius: 30px; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1); 
-            max-width: 400px; 
-            width: 100%; 
-        }
-        #peso { 
-            font-size: 5.5rem; 
-            font-weight: 800; 
-            color: var(--accent); 
-            margin: 15px 0; 
-            letter-spacing: -2px;
-        }
-        .unit { font-size: 1.8rem; color: #aaa; margin-left: 5px; }
-        .btn { 
-            background: var(--primary); 
-            color: white; 
-            border: none; 
-            padding: 20px 40px; 
-            border-radius: 50px; 
-            font-size: 1.3rem; 
-            font-weight: bold; 
-            cursor: pointer; 
-            width: 100%; 
-            box-shadow: 0 10px 25px rgba(0,48,135,0.3); 
-            transition: transform 0.1s;
-        }
-        .btn:active { transform: scale(0.98); }
-        #status { font-size: 1rem; color: #444; margin-top: 25px; font-weight: 500; min-height: 24px; }
-        #log { 
-            font-family: 'Courier New', Courier, monospace; 
-            font-size: 0.75rem; 
-            text-align: left; 
-            background: #1a1a1a; 
-            color: #00ff00; 
-            padding: 15px; 
-            height: 130px; 
-            overflow-y: auto; 
-            margin-top: 25px; 
-            border-radius: 12px; 
-            border: 1px solid #333;
-        }
+        body { font-family: sans-serif; text-align: center; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .card { background: white; padding: 40px; border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); max-width: 420px; width: 100%; }
+        #peso { font-size: 5.5rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
+        .unit { font-size: 1.8rem; color: #aaa; }
+        .btn { background: var(--primary); color: white; border: none; padding: 20px 40px; border-radius: 50px; font-size: 1.3rem; font-weight: bold; cursor: pointer; width: 100%; }
+        #status { font-size: 1rem; color: #444; margin-top: 20px; font-weight: 500; }
+        #log { font-family: monospace; font-size: 0.75rem; text-align: left; background: #1a1a1a; color: #00ff00; padding: 15px; height: 150px; overflow-y: auto; margin-top: 20px; border-radius: 12px; }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h2 style="color:var(--primary); margin:0;">PredictaCore</h2>
-        <p style="color:#888; margin-top:5px;">Sincronización Directa</p>
-        
+        <p style="color:#888; margin-top:5px;">Sincronización Maestra WL_SC2</p>
         <div id="peso">0.0<span class="unit">kg</span></div>
-        
         <button class="btn" onclick="conectarWyze()">CONECTAR BÁSCULA</button>
-        
-        <p id="status">Presiona para iniciar</p>
-        
-        <div id="log">Consola de sistema lista...</div>
+        <p id="status">Presiona para iniciar escaneo total</p>
+        <div id="log">Esperando...</div>
     </div>
 
     <script>
@@ -84,72 +32,68 @@
         const logEl = document.getElementById('log');
 
         function logger(msg) {
-            const time = new Date().toLocaleTimeString().split(' ')[0];
-            logEl.innerHTML += `[${time}] ${msg}<br>`;
+            logEl.innerHTML += `> ${msg}<br>`;
             logEl.scrollTop = logEl.scrollHeight;
-            console.log(msg);
         }
 
         async function conectarWyze() {
             try {
-                logger("Iniciando escaneo de WL_SC2...");
-                statusEl.innerText = "Buscando dispositivo...";
-
-                // SOLUCIÓN: El servicio DEBE estar en el filtro inicial para que macOS lo reconozca
+                logger("Iniciando escaneo Universal...");
+                
+                // USAMOS acceptAllDevices PARA EVITAR FILTROS DE SEGURIDAD
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { name: 'WL_SC2' },
-                        { services: ['0000181b-0000-1000-8000-00805f9b34fb'] }
-                    ],
-                    optionalServices: ['0000181b-0000-1000-8000-00805f9b34fb']
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000181b-0000-1000-8000-00805f9b34fb', // Estándar
+                        'a530181b-0000-1000-8000-00805f9b34fb', // Wyze V1
+                        '00001314-0000-1000-8000-00805f9b34fb'  // Wyze V2 Custom
+                    ]
                 });
 
-                logger("Conectado a: " + device.name);
-                statusEl.innerText = "Vinculando canales...";
-
+                logger("Dispositivo: " + device.name);
                 const server = await device.gatt.connect();
-                logger("Servidor GATT conectado.");
+                logger("Conectado. Mapeando servicios...");
 
-                // Acceso directo al servicio de Peso
-                const service = await server.getPrimaryService('0000181b-0000-1000-8000-00805f9b34fb');
-                logger("Servicio 181B encontrado.");
+                const services = await server.getPrimaryServices();
+                logger("Servicios detectados: " + services.length);
 
-                // Acceso a la característica de Medición
-                const characteristic = await service.getCharacteristic('00002a9d-0000-1000-8000-00805f9b34fb');
-                logger("Canal 2A9D abierto.");
+                let targetChar = null;
 
-                await characteristic.startNotifications();
-                logger("Sincronización completa. Esperando peso...");
-                statusEl.innerText = "¡Listo! Súbete a la báscula.";
+                for (const service of services) {
+                    logger("Explorando: " + service.uuid.substring(0, 8));
+                    const chars = await service.getCharacteristics();
+                    for (const c of chars) {
+                        // Buscamos cualquier característica que permita notificaciones
+                        // y que coincida con patrones de peso (2a9d o Wyze Custom)
+                        if (c.properties.notify && (c.uuid.includes('2a9d') || c.uuid.includes('1314'))) {
+                            targetChar = c;
+                            logger("¡Canal de datos hallado! -> " + c.uuid.substring(0, 8));
+                            break;
+                        }
+                    }
+                    if (targetChar) break;
+                }
 
-                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                if (!targetChar) throw new Error("No se halló canal de peso compatible.");
+
+                await targetChar.startNotifications();
+                statusEl.innerText = "¡Sincronizado! Súbete.";
+
+                targetChar.addEventListener('characteristicvaluechanged', (event) => {
                     const data = event.target.value;
-                    
-                    // Decodificación: Byte 1 y 2 contienen el peso
+                    // Wyze manda datos en diferentes offsets. Probamos el byte 1:
                     const weightRaw = data.getUint16(1, true); 
-                    
-                    // Ajuste de escala para el modelo WL_SC2 (normalmente 0.01)
                     let weightKg = (weightRaw * 0.01).toFixed(1);
 
-                    // Si el dato es coherente (> 5kg), actualizamos la pantalla
-                    if (parseFloat(weightKg) > 5) {
+                    if (parseFloat(weightKg) > 10) {
                         pesoEl.innerHTML = `${weightKg}<span class="unit">kg</span>`;
-                        logger("Captura: " + weightKg + " kg");
+                        logger("Lectura: " + weightKg + " kg");
                     }
-                });
-
-                device.addEventListener('gattserverdisconnected', () => {
-                    logger("Aviso: Conexión perdida.");
-                    statusEl.innerText = "Desconectado. Pulsa para reintentar.";
                 });
 
             } catch (error) {
                 logger("ERROR: " + error.message);
-                statusEl.innerText = "Fallo en la comunicación.";
-                
-                if (error.message.includes("No Services")) {
-                    logger("TIP: Elimina WL_SC2 de tus ajustes BT y reinicia Bluetooth.");
-                }
+                statusEl.innerText = "Error en el mapeo.";
             }
         }
     </script>
