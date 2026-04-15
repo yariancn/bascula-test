@@ -3,27 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PredictaCore | Sincronización WL_SC2</title>
+    <title>PredictaCore | Control WL_SC2</title>
     <style>
         :root { --primary: #003087; --accent: #00BFFF; --bg: #f4f7f6; }
-        body { font-family: sans-serif; text-align: center; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .card { background: white; padding: 40px; border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
-        #peso { font-size: 5.5rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
-        .unit { font-size: 1.8rem; color: #aaa; }
-        .btn { background: var(--primary); color: white; border: none; padding: 20px 40px; border-radius: 50px; font-size: 1.3rem; font-weight: bold; cursor: pointer; width: 100%; }
-        #status { font-size: 1rem; color: #444; margin-top: 25px; }
-        #log { font-family: monospace; font-size: 0.7rem; text-align: left; background: #222; color: #0f0; padding: 15px; height: 120px; overflow-y: auto; margin-top: 25px; border-radius: 12px; }
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            text-align: center; 
+            background: var(--bg); 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+        }
+        .card { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 30px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1); 
+            max-width: 400px; 
+            width: 100%; 
+        }
+        #peso { 
+            font-size: 5.5rem; 
+            font-weight: 800; 
+            color: var(--accent); 
+            margin: 15px 0; 
+            letter-spacing: -2px;
+        }
+        .unit { font-size: 1.8rem; color: #aaa; margin-left: 5px; }
+        .btn { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 20px 40px; 
+            border-radius: 50px; 
+            font-size: 1.3rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            width: 100%; 
+            box-shadow: 0 10px 25px rgba(0,48,135,0.3); 
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+        #status { font-size: 1rem; color: #444; margin-top: 25px; font-weight: 500; min-height: 24px; }
+        #log { 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 0.75rem; 
+            text-align: left; 
+            background: #1a1a1a; 
+            color: #00ff00; 
+            padding: 15px; 
+            height: 130px; 
+            overflow-y: auto; 
+            margin-top: 25px; 
+            border-radius: 12px; 
+            border: 1px solid #333;
+        }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h2 style="color:var(--primary); margin:0;">PredictaCore</h2>
-        <p style="color:#888; margin-top:5px;">Conexión Directa WL_SC2</p>
+        <p style="color:#888; margin-top:5px;">Sincronización Directa</p>
+        
         <div id="peso">0.0<span class="unit">kg</span></div>
+        
         <button class="btn" onclick="conectarWyze()">CONECTAR BÁSCULA</button>
-        <p id="status">Presiona para sincronizar</p>
-        <div id="log">Esperando dispositivo...</div>
+        
+        <p id="status">Presiona para iniciar</p>
+        
+        <div id="log">Consola de sistema lista...</div>
     </div>
 
     <script>
@@ -32,67 +84,72 @@
         const logEl = document.getElementById('log');
 
         function logger(msg) {
-            logEl.innerHTML += `> ${msg}<br>`;
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            logEl.innerHTML += `[${time}] ${msg}<br>`;
             logEl.scrollTop = logEl.scrollHeight;
+            console.log(msg);
         }
 
         async function conectarWyze() {
             try {
-                logger("Buscando WL_SC2...");
-                // Filtro agresivo: Aceptamos el dispositivo y pedimos TODOS los servicios posibles
+                logger("Iniciando escaneo de WL_SC2...");
+                statusEl.innerText = "Buscando dispositivo...";
+
+                // SOLUCIÓN: El servicio DEBE estar en el filtro inicial para que macOS lo reconozca
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'WL_' }, { name: 'WL_SC2' }],
-                    optionalServices: [
-                        '0000181b-0000-1000-8000-00805f9b34fb',
-                        'a530181b-0000-1000-8000-00805f9b34fb', // Wyze Custom
-                        '0000181d-0000-1000-8000-00805f9b34fb'
-                    ]
+                    filters: [
+                        { name: 'WL_SC2' },
+                        { services: ['0000181b-0000-1000-8000-00805f9b34fb'] }
+                    ],
+                    optionalServices: ['0000181b-0000-1000-8000-00805f9b34fb']
                 });
 
                 logger("Conectado a: " + device.name);
+                statusEl.innerText = "Vinculando canales...";
+
                 const server = await device.gatt.connect();
-                
-                // ESCÁNER DE SERVICIOS: Buscamos cuál de todos tiene la medición de peso
-                logger("Explorando canales de datos...");
-                const services = await server.getPrimaryServices();
-                
-                let characteristicFound = null;
+                logger("Servidor GATT conectado.");
 
-                for (const service of services) {
-                    logger("Revisando servicio: " + service.uuid.substring(0, 8));
-                    const characteristics = await service.getCharacteristics();
-                    for (const char of characteristics) {
-                        // El UUID 2a9d es el estándar para Weight Measurement
-                        if (char.uuid.includes('2a9d') || char.uuid.includes('2a9c')) {
-                            characteristicFound = char;
-                            break;
-                        }
-                    }
-                    if (characteristicFound) break;
-                }
+                // Acceso directo al servicio de Peso
+                const service = await server.getPrimaryService('0000181b-0000-1000-8000-00805f9b34fb');
+                logger("Servicio 181B encontrado.");
 
-                if (!characteristicFound) {
-                    throw new Error("No se encontró canal de peso. Intenta re-emparejar.");
-                }
+                // Acceso a la característica de Medición
+                const characteristic = await service.getCharacteristic('00002a9d-0000-1000-8000-00805f9b34fb');
+                logger("Canal 2A9D abierto.");
 
-                await characteristicFound.startNotifications();
-                logger("¡CANAL ABIERTO!");
+                await characteristic.startNotifications();
+                logger("Sincronización completa. Esperando peso...");
                 statusEl.innerText = "¡Listo! Súbete a la báscula.";
 
-                characteristicFound.addEventListener('characteristicvaluechanged', (event) => {
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     const data = event.target.value;
-                    let weightRaw = data.getUint16(1, true);
-                    let weightKg = (weightRaw * 0.01).toFixed(1); // Ajustado para WL_SC2
                     
+                    // Decodificación: Byte 1 y 2 contienen el peso
+                    const weightRaw = data.getUint16(1, true); 
+                    
+                    // Ajuste de escala para el modelo WL_SC2 (normalmente 0.01)
+                    let weightKg = (weightRaw * 0.01).toFixed(1);
+
+                    // Si el dato es coherente (> 5kg), actualizamos la pantalla
                     if (parseFloat(weightKg) > 5) {
                         pesoEl.innerHTML = `${weightKg}<span class="unit">kg</span>`;
-                        logger("Peso: " + weightKg + " kg");
+                        logger("Captura: " + weightKg + " kg");
                     }
                 });
 
+                device.addEventListener('gattserverdisconnected', () => {
+                    logger("Aviso: Conexión perdida.");
+                    statusEl.innerText = "Desconectado. Pulsa para reintentar.";
+                });
+
             } catch (error) {
-                logger("ERROR: " + error);
-                statusEl.innerText = "Fallo: " + error.name;
+                logger("ERROR: " + error.message);
+                statusEl.innerText = "Fallo en la comunicación.";
+                
+                if (error.message.includes("No Services")) {
+                    logger("TIP: Elimina WL_SC2 de tus ajustes BT y reinicia Bluetooth.");
+                }
             }
         }
     </script>
