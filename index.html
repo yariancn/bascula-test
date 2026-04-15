@@ -3,97 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PredictaCore | Master Wyze Link</title>
+    <title>PredictaCore | Sincronización Total</title>
     <style>
         :root { --primary: #003087; --accent: #00BFFF; --bg: #f4f7f6; }
         body { font-family: sans-serif; text-align: center; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; }
         .card { background: white; padding: 40px; border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); max-width: 420px; width: 100%; }
         #peso { font-size: 5.5rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
-        .unit { font-size: 1.8rem; color: #aaa; }
         .btn { background: var(--primary); color: white; border: none; padding: 20px 40px; border-radius: 50px; font-size: 1.3rem; font-weight: bold; cursor: pointer; width: 100%; }
-        #status { font-size: 1rem; color: #444; margin-top: 20px; font-weight: 500; }
         #log { font-family: monospace; font-size: 0.75rem; text-align: left; background: #1a1a1a; color: #00ff00; padding: 15px; height: 150px; overflow-y: auto; margin-top: 20px; border-radius: 12px; }
     </style>
 </head>
 <body>
-
     <div class="card">
         <h2 style="color:var(--primary); margin:0;">PredictaCore</h2>
-        <p style="color:#888; margin-top:5px;">Sincronización Maestra WL_SC2</p>
-        <div id="peso">0.0<span class="unit">kg</span></div>
-        <button class="btn" onclick="conectarWyze()">CONECTAR BÁSCULA</button>
-        <p id="status">Presiona para iniciar escaneo total</p>
+        <div id="peso">0.0<span style="font-size:1.5rem; color:#aaa;">kg</span></div>
+        <button class="btn" onclick="conectarWyze()">FORZAR CONEXIÓN</button>
+        <p id="status" style="margin-top:15px; font-weight:bold;">Asegúrate de que la báscula PARPADEE</p>
         <div id="log">Esperando...</div>
     </div>
 
     <script>
-        const statusEl = document.getElementById('status');
-        const pesoEl = document.getElementById('peso');
         const logEl = document.getElementById('log');
-
-        function logger(msg) {
-            logEl.innerHTML += `> ${msg}<br>`;
-            logEl.scrollTop = logEl.scrollHeight;
-        }
+        function logger(msg) { logEl.innerHTML += `> ${msg}<br>`; logEl.scrollTop = logEl.scrollHeight; }
 
         async function conectarWyze() {
             try {
-                logger("Iniciando escaneo Universal...");
+                logger("Paso 1: Escaneando con Whitelist...");
                 
-                // USAMOS acceptAllDevices PARA EVITAR FILTROS DE SEGURIDAD
+                // Forzamos a Chrome a que considere estos servicios como "conocidos"
                 const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
+                    filters: [{ name: 'WL_SC2' }],
                     optionalServices: [
-                        '0000181b-0000-1000-8000-00805f9b34fb', // Estándar
-                        'a530181b-0000-1000-8000-00805f9b34fb', // Wyze V1
-                        '00001314-0000-1000-8000-00805f9b34fb'  // Wyze V2 Custom
+                        '0000181b-0000-1000-8000-00805f9b34fb',
+                        '0000180a-0000-1000-8000-00805f9b34fb',
+                        '0000181d-0000-1000-8000-00805f9b34fb'
                     ]
                 });
 
-                logger("Dispositivo: " + device.name);
+                logger("Paso 2: Conectando a GATT...");
                 const server = await device.gatt.connect();
-                logger("Conectado. Mapeando servicios...");
 
-                const services = await server.getPrimaryServices();
-                logger("Servicios detectados: " + services.length);
+                // Intentamos acceder directamente al servicio estándar
+                logger("Paso 3: Accediendo a Servicio de Peso...");
+                const service = await server.getPrimaryService('0000181b-0000-1000-8000-00805f9b34fb');
+                
+                logger("Paso 4: Abriendo canal de datos...");
+                const characteristic = await service.getCharacteristic('00002a9d-0000-1000-8000-00805f9b34fb');
 
-                let targetChar = null;
+                await characteristic.startNotifications();
+                document.getElementById('status').innerText = "¡SINCRONIZADO! Súbete.";
+                logger("¡ÉXITO! Esperando pesada...");
 
-                for (const service of services) {
-                    logger("Explorando: " + service.uuid.substring(0, 8));
-                    const chars = await service.getCharacteristics();
-                    for (const c of chars) {
-                        // Buscamos cualquier característica que permita notificaciones
-                        // y que coincida con patrones de peso (2a9d o Wyze Custom)
-                        if (c.properties.notify && (c.uuid.includes('2a9d') || c.uuid.includes('1314'))) {
-                            targetChar = c;
-                            logger("¡Canal de datos hallado! -> " + c.uuid.substring(0, 8));
-                            break;
-                        }
-                    }
-                    if (targetChar) break;
-                }
-
-                if (!targetChar) throw new Error("No se halló canal de peso compatible.");
-
-                await targetChar.startNotifications();
-                statusEl.innerText = "¡Sincronizado! Súbete.";
-
-                targetChar.addEventListener('characteristicvaluechanged', (event) => {
-                    const data = event.target.value;
-                    // Wyze manda datos en diferentes offsets. Probamos el byte 1:
-                    const weightRaw = data.getUint16(1, true); 
-                    let weightKg = (weightRaw * 0.01).toFixed(1);
-
-                    if (parseFloat(weightKg) > 10) {
-                        pesoEl.innerHTML = `${weightKg}<span class="unit">kg</span>`;
-                        logger("Lectura: " + weightKg + " kg");
+                characteristic.addEventListener('characteristicvaluechanged', (e) => {
+                    const weightRaw = e.target.value.getUint16(1, true);
+                    const weightKg = (weightRaw * 0.01).toFixed(1);
+                    if (weightKg > 5) {
+                        document.getElementById('peso').innerHTML = `${weightKg}<span style="font-size:1.5rem; color:#aaa;">kg</span>`;
+                        logger("Captura: " + weightKg + " kg");
                     }
                 });
 
             } catch (error) {
                 logger("ERROR: " + error.message);
-                statusEl.innerText = "Error en el mapeo.";
+                if(error.message.includes("No Services")) {
+                    logger("ERROR CRÍTICO: El Mac está bloqueando los servicios. Debes 'Olvidar' la báscula en Ajustes de Bluetooth.");
+                }
             }
         }
     </script>
