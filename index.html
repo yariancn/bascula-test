@@ -1,51 +1,188 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>PredictaCore | WL_SC2 Sniffer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PredictaCore | Titan Mode Scale</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #000; color: #0f0; padding: 20px; }
-        #log { text-align: left; background: #111; padding: 20px; height: 300px; overflow-y: auto; border: 1px solid #333; font-family: monospace; }
-        .btn { background: #00BFFF; color: white; border: none; padding: 20px; border-radius: 10px; font-size: 1.2rem; cursor: pointer; }
+        :root {
+            --bg-color: #0a0a0b;
+            --card-bg: #141417;
+            --primary-blue: #00BFFF;
+            --dark-blue: #003087;
+            --text-main: #ffffff;
+            --text-dim: #88888e;
+            --accent-gold: #d4af37;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .titan-card {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 450px;
+            padding: 40px;
+            border-radius: 40px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            border: 1px solid #222;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 1.2rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--accent-gold);
+            margin: 0;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-top: 5px;
+        }
+
+        .weight-display {
+            font-size: 7rem;
+            font-weight: 800;
+            color: var(--primary-blue);
+            margin: 20px 0;
+            text-shadow: 0 0 30px rgba(0, 191, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+        }
+
+        .weight-display span {
+            font-size: 2rem;
+            color: var(--text-dim);
+            margin-left: 10px;
+            font-weight: 300;
+        }
+
+        .btn-sync {
+            background: linear-gradient(135deg, var(--dark-blue), var(--primary-blue));
+            color: white;
+            border: none;
+            padding: 22px 40px;
+            border-radius: 100px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0, 48, 135, 0.4);
+        }
+
+        .btn-sync:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(0, 191, 255, 0.4);
+        }
+
+        .btn-sync:active {
+            transform: translateY(1px);
+        }
+
+        .status-box {
+            margin-top: 30px;
+            font-size: 0.85rem;
+            padding: 15px;
+            background: #000;
+            border-radius: 15px;
+            border: 1px solid #222;
+            color: #4cd964; /* Color verde éxito */
+            min-height: 20px;
+            font-family: 'Monaco', monospace;
+        }
+
+        .loader {
+            display: none;
+            border: 3px solid #333;
+            border-top: 3px solid var(--primary-blue);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <h2>Sniffer de Datos WL_SC2</h2>
-    <button class="btn" onclick="escucharAnuncios()">INICIAR ESCUCHA</button>
-    <div id="log">Haz clic y luego súbete a la báscula...</div>
+
+    <div class="titan-card">
+        <div class="header">
+            <h1>PredictaCore</h1>
+            <p>Titan Mode | Bio-Sync System</p>
+        </div>
+
+        <div class="loader" id="loader"></div>
+        <div class="weight-display" id="displayPeso">
+            0.0<span>kg</span>
+        </div>
+
+        <button class="btn-sync" onclick="obtenerPesoDesdeNube()">Sincronizar Báscula</button>
+
+        <div class="status-box" id="statusMessage">
+            SISTEMA LISTO: ESPERANDO CAPTURA
+        </div>
+    </div>
 
     <script>
-        async function escucharAnuncios() {
-            const log = (msg) => { document.getElementById('log').innerHTML += `> ${msg}<br>`; };
+        const API_URL = "https://script.google.com/macros/s/AKfycbzcK_m-iw-at4DvJVS1Dr49xUj93Dkqj-j-vo5gyAG4vbxsoi4OPiWRBGvcoP3w-9sh/exec";
+
+        async function obtenerPesoDesdeNube() {
+            const statusBox = document.getElementById('statusMessage');
+            const displayPeso = document.getElementById('displayPeso');
+            const loader = document.getElementById('loader');
+
+            // UI State: Cargando
+            statusBox.style.color = "#ff9500"; // Naranja
+            statusBox.innerText = "ACCEDIENDO A NUBE GOOGLE FIT...";
+            loader.style.display = "block";
+
             try {
-                log("Activando modo escucha (Bluetooth Scan)...");
-                
-                // Esta función busca dispositivos cercanos sin conectarse a ellos
-                const browser = await navigator.bluetooth.requestLEScan({
-                    filters: [{ name: 'WL_SC2' }],
-                    keepRepeatedDevices: true
-                });
+                // Petición al script que ya tiene habilitada la Fitness API
+                const response = await fetch(API_URL + "?action=obtenerPesoWyze");
+                const data = await response.json();
 
-                log("Escuchando... Súbete a la báscula ahora.");
-
-                navigator.bluetooth.addEventListener('advertisementreceived', event => {
-                    log("¡Paquete recibido de " + event.device.name + "!");
+                if (data.success && data.peso !== "0.0") {
+                    // Actualizar pantalla con el peso real
+                    displayPeso.innerHTML = `${data.peso}<span>kg</span>`;
+                    statusBox.style.color = "#4cd964"; // Verde
+                    statusBox.innerText = "SINCRONIZACIÓN EXITOSA: " + data.peso + " KG";
                     
-                    // Las Wyze modernas mandan el peso en el "Manufacturer Data"
-                    if (event.manufacturerData) {
-                        for (let [id, data] of event.manufacturerData) {
-                            log("Datos de fabricante detectados...");
-                            // Intentamos encontrar el peso en los bytes del anuncio
-                            if (data.byteLength >= 4) {
-                                let weight = (data.getUint16(2, false) * 0.1).toFixed(1);
-                                log("POSIBLE PESO DETECTADO: " + weight + " kg");
-                            }
-                        }
-                    }
-                });
-
-            } catch (e) {
-                log("ERROR: " + e);
-                log("TIP: Asegúrate de que 'Experimental Web Platform features' esté activado en chrome://flags");
+                    // Aquí podrías disparar el guardado automático si lo deseas
+                } else {
+                    statusBox.style.color = "#ff3b30"; // Rojo
+                    statusBox.innerText = "ERROR: NO HAY PESADAS RECIENTES (ÚLTIMOS 10 MIN)";
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                statusBox.style.color = "#ff3b30";
+                statusBox.innerText = "ERROR DE COMUNICACIÓN CON EL SERVIDOR";
+            } finally {
+                loader.style.display = "none";
             }
         }
     </script>
